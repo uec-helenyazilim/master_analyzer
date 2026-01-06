@@ -5,5 +5,5 @@ source ./setup.sh
 clear
 
 # start flask server
-flask --app app.py run
+fastapi run main.py --host 127.0.0.1 --port 5000
 

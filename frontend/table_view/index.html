@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Master Analyzer • Tables</title>
+    <link rel="stylesheet" href="/frontend/styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <section class="form-panel" role="region" aria-label="Actions">
+        <h1>Tables</h1>
+        <button class="primary" id="refreshBtn">Refresh Tables</button>
+        <div id="status" class="status" aria-live="polite"></div>
+      </section>
+
+      <main class="page-content">
+        <div id="tablesContainer"></div>
+      </main>
+    </div>
+
+    <script src="/frontend/js/api.js"></script>
+    <script src="/frontend/table_view/table_view.js"></script>
+  </body>
+</html>

@@ -5,5 +5,4 @@ source ./setup.sh
 clear
 
 # start flask server (debug mode)
-flask --app app.py --debug run
-
+fastapi dev main.py --host 127.0.0.1 --port 5000

@@ -1,36 +1,31 @@
 from datetime import datetime, timedelta, UTC
 from genericpath import isdir
 import json
-from re import DEBUG
 import numpy as np
 import pandas as pd
 import matplotlib
 matplotlib.use('Agg')  # Use a non-interactive backend
 import matplotlib.pyplot as plt
-import sys
-import os
 import mysql.connector
 import warnings
 warnings.filterwarnings("ignore")
-from sqlalchemy import inspect, text
-from flask import Flask, render_template_string
 
-import src.parser_helpers as parser_helpers
-import src.calculator_helpers as calculator_helpers
-import src.presenter_helpers as presenter_helpers
+from . import parser_helpers as parser_helpers
+from . import calculator_helpers as calculator_helpers
+from . import presenter_helpers as presenter_helpers
 
 time_column_names_for_tables = {
-    "daily": "Timestamp",
-    "deals": "Timestamp",
-    "eod_positions": "date",
-    "positions": "Timestamp",
-    "users": "Timestamp"
-} # for eod_positions, the time column must be converted to mt5 timestamp format during parsing
+    "daily": "Datetime", # timestamp (1e10)
+    "deals": "Time", # YYYY-MM-DD HH:MM:SS
+    "eod_positions": "date", # YYYY-MM-DD
+    "positions": "TimeCreate", # YYYY-MM-DD HH:MM:SS
+    "users": "LastAccess" # YYYY-MM-DD HH:MM:SS
+} 
 
 columns_to_pull_from_view_tables = {
     # Columns trimmed to match Base table definitions
     'daily': [
-        'Login', 'Timestamp', 'Group', 'Currency', 'Company', 'Balance', 'Credit', 'InterestRate',
+        'Login', 'Datetime', 'Group', 'Currency', 'Company', 'Balance', 'Credit', 'InterestRate',
         'CommissionDaily', 'CommissionMonthly', 'BalancePrevDay', 'BalancePrevMonth', 'EquityPrevDay',
         'EquityPrevMonth', 'Margin', 'MarginFree', 'MarginLevel', 'MarginLeverage', 'Profit',
         'ProfitStorage', 'ProfitCommission', 'ProfitEquity', 'DailyProfit', 'DailyBalance',
@@ -38,16 +33,24 @@ columns_to_pull_from_view_tables = {
         'DailyCommInstant', 'DailyCommFee', 'DailyCommRound'
     ],
     'deals': [
-        'Deal', 'Timestamp', 'Login', "Order", 'Action', 'Entry', 'ContractSize', 'Symbol', 'Price',
+        'Deal', '`Time`', 'Login', "'Order'", 'Action', 'Entry', 'ContractSize', 'Symbol', 'Price',
         'Profit', 'Commission', 'PricePosition', 'Volume', 'VolumeClosed'
     ],
     'eod_positions': ['login', 'symbol', 'cmd', 'cs', 'date', 'openprice', 'swap', 'profit', 'lot'],
     'positions': [
-        'Position_ID', 'Position', 'Login', 'Timestamp', 'Symbol', 'Action', 'Digits', 
+        'Position_ID', 'Position', 'Login', 'TimeCreate', 'Symbol', 'Action', 'Digits', 
         'DigitsCurrency', 'Reason', 'ContractSize', 'PriceOpen', 'PriceSL', 'PriceTP', 
         'VolumeExt', 'Storage', 'RateMargin', 'Comment', 'Volume'
     ],
-    'users': ['Login', 'Timestamp', 'Group', 'CertSerialNumber', 'Rights', 'Registration', 'LastAccess', 'LastPassChange', 'FirstName', 'LastName', 'MiddleName', 'Company', 'Account', 'Country', 'Language', 'ClientID', 'City', 'State', 'ZipCode', 'Address', 'Phone', 'Email', 'ID', 'Status', 'Comment', 'Color', 'PhonePassword', 'Leverage', 'Agent', 'TradeAccounts', 'LeadCampaign', 'LeadSource', 'TimestampTrade', 'Balance', 'Credit', 'InterestRate', 'CommissionDaily', 'CommissionMonthly', 'BalancePrevDay', 'BalancePrevMonth', 'EquityPrevDay', 'EquityPrevMonth', 'Name', 'MQID', 'LastIP', 'ApiData', 'LimitPositions', 'LimitOrders']
+    'users': ['Login', 'LastAccess', 'Group', 'CertSerialNumber', 'Rights', 
+              'Registration', 'LastAccess', 'LastPassChange', 
+              'FirstName', 'LastName', 'MiddleName', 'Company', 'Account', 'Country', 'Language', 
+              'ClientID', 'City', 'State', 'ZipCode', 'Address', 'Phone', 'Email', 'ID', 
+              'Status', 'Comment', 'Color', 'PhonePassword', 'Leverage', 'Agent', 'TradeAccounts', 
+              'LeadCampaign', 'LeadSource', 'TimestampTrade', 
+              'Balance', 'Credit', 'InterestRate', 'CommissionDaily', 'CommissionMonthly', 
+              'BalancePrevDay', 'BalancePrevMonth', 'EquityPrevDay', 'EquityPrevMonth', 
+              'Name', 'MQID', 'LastIP', 'ApiData', 'LimitPositions', 'LimitOrders']
 }
 
 local_db_columns = {
@@ -176,9 +179,6 @@ class Collector:
         self.mysql_connector = mysql.connector.connect(**mysql_credentials)
 
     def fetch_table_from_daily(self, login: int | None = None, start_timestamp: int | None = None, end_timestamp: int | None = None) -> pd.DataFrame:
-        print("Fetching daily table...")
-        start_time = datetime.now()
-        # timestamp is of metatrader format (nanoseconds since epoch)
         foo = columns_to_pull_from_view_tables['daily']
         for col in foo:
             if col == "Group":
@@ -198,41 +198,30 @@ class Collector:
 
         df = pd.read_sql(query, self.mysql_connector)
         df.sort_values(by=time_column_names_for_tables['daily'], inplace=True)
-        print(f"Daily table fetched in {datetime.now() - start_time}")
         return df
 
-    def fetch_table_from_deals(self, login: int | None = None, symbol: str | None = None, start_timestamp: int | None = None, end_timestamp: int | None = None) -> pd.DataFrame:
-        print("Fetching deals table...")
-        start_time = datetime.now()
-        # timestamp is of metatrader format (nanoseconds since epoch)
+    def fetch_table_from_deals(self, login: int | None = None, symbol: str | None = None, start_time: datetime | None = None, end_time: datetime | None = None) -> pd.DataFrame:
+        
         foo = columns_to_pull_from_view_tables['deals']
-        for col in columns_to_pull_from_view_tables['deals']:
-            if col == "Order":
-                foo.remove(col)
-                foo.append("`Order`")
         query = f"SELECT {', '.join(foo)} FROM metatrader5.mt5_deals_v"
 
-        if login is not None or start_timestamp is not None or end_timestamp is not None:
+        if login is not None or start_time is not None or end_time is not None:
             query += " WHERE "
             if login:
                 query += f"Login = {login} AND "
             if symbol:
                 query += f"Symbol = '{symbol}' AND "
-            if start_timestamp:
-                query += f"{time_column_names_for_tables['daily']} >= '{start_timestamp}' AND "
-            if end_timestamp:
-                query += f"{time_column_names_for_tables['daily']} <= '{end_timestamp}' AND "
+            if start_time:
+                query += f"{time_column_names_for_tables['deals']} >= '{start_time.strftime('%Y-%m-%d %H:%M:%S')}' AND "
+            if end_time:
+                query += f"{time_column_names_for_tables['deals']} <= '{end_time.strftime('%Y-%m-%d %H:%M:%S')}' AND "
             query = query.rstrip(" AND ")  # remove trailing AND
 
         df = pd.read_sql(query, self.mysql_connector)
         df.sort_values(by=time_column_names_for_tables['deals'], inplace=True)
-        print(f"Deals table fetched in {datetime.now() - start_time}")
         return df
 
-    def fetch_table_from_eod_positions(self, login: int | None = None, symbol: str | None = None, start_time: str | None = None, end_time: str | None = None) -> pd.DataFrame:
-        print("Fetching eod_positions table...")
-        fetch_start_time = datetime.now()
-        # date is of "YYYY-MM-DD" format
+    def fetch_table_from_eod_positions(self, login: int | None = None, symbol: str | None = None, start_time: datetime | None = None, end_time: datetime | None = None) -> pd.DataFrame:
         query = f"SELECT {', '.join(columns_to_pull_from_view_tables['eod_positions'])} FROM metatrader5.mt5_eod_positions_v"
 
         if login is not None or start_time is not None or end_time is not None:
@@ -249,27 +238,24 @@ class Collector:
 
         df = pd.read_sql(query, self.mysql_connector)
         df.sort_values(by=time_column_names_for_tables['eod_positions'], inplace=True)
-        print(f"EOD positions table fetched in {datetime.now() - fetch_start_time}")
         return df
     
-    def fetch_table_from_positions(self, login: int | None = None, symbol: str | None = None, start_timestamp: int | None = None, end_timestamp: int | None = None) -> pd.DataFrame:
+    def fetch_table_from_positions(self, login: int | None = None, symbol: str | None = None, start_time: datetime | None = None, end_time: datetime | None = None) -> pd.DataFrame:
         print("Fetching positions table...")
         fetch_start_time = datetime.now()
         # timestamp is of metatrader format (nanoseconds since epoch)
         query = f"SELECT {', '.join(columns_to_pull_from_view_tables['positions'])} FROM metatrader5.mt5_positions_v"
 
-        if login is not None or start_timestamp is not None or end_timestamp is not None:
+        if login is not None or start_time is not None or end_time is not None:
             query += " WHERE "
             if login:
                 query += f"Login = {login} AND "
             if symbol:
                 query += f"Symbol = '{symbol}' AND "
-            if start_timestamp:
-                start_time = convert_mt5_timestamp_to_date(start_timestamp)
-                query += f"{time_column_names_for_tables['positions']} >= '{start_time}' AND "
-            if end_timestamp:
-                end_time = convert_mt5_timestamp_to_date(end_timestamp)
-                query += f"{time_column_names_for_tables['positions']} <= '{end_time}' AND "
+            if start_time:
+                query += f"{time_column_names_for_tables['positions']} >= '{start_time.strftime('%Y-%m-%d %H:%M:%S')}' AND "
+            if end_time:
+                query += f"{time_column_names_for_tables['positions']} <= '{end_time.strftime('%Y-%m-%d %H:%M:%S')}' AND "
             query = query.rstrip(" AND ")  # remove trailing AND
         
         df = pd.read_sql(query, self.mysql_connector)
@@ -277,61 +263,48 @@ class Collector:
         print(f"Positions table fetched in {datetime.now() - fetch_start_time}")
         return df
 
-    def fetch_table_from_users(self, login: int | None = None, start_timestamp: int | None = None, end_timestamp: int | None = None) -> pd.DataFrame:
-        print("Fetching users table...")
-        start_time = datetime.now()
+    def fetch_table_from_users(self, login: int | None = None, start_time: datetime | None = None, end_time: datetime | None = None) -> pd.DataFrame:
+        
         query = f"SELECT {', '.join(columns_to_pull_from_view_tables['users'])} FROM metatrader5.mt5_users_v"
-
-        if login is not None or start_timestamp is not None or end_timestamp is not None:
+        if login is not None or start_time is not None or end_time is not None:
             query += " WHERE "
             if login:
                 query += f"Login = {login} AND "
-            if start_timestamp:
-                query += f"{time_column_names_for_tables['daily']} >= '{start_timestamp}' AND "
-            if end_timestamp:
-                query += f"{time_column_names_for_tables['daily']} <= '{end_timestamp}' AND "
+            if start_time:
+                query += f"{time_column_names_for_tables['users']} >= '{start_time}' AND "
+            if end_time:
+                query += f"{time_column_names_for_tables['users']} <= '{end_time}' AND "
             query = query.rstrip(" AND ")  # remove trailing AND
             
         df = pd.read_sql(query, self.mysql_connector)
         df.sort_values(by=time_column_names_for_tables['users'], inplace=True)
-        print(f"Users table fetched in {datetime.now() - start_time}")
         return df
     
-    def fetch_table_from_view_table(self, table_name: str, login: int | None = None, symbol: str | None = None, start_time: datetime | None = None, end_time: datetime | None = None, ):
-        
+    def fetch_table_from_view_table(self, table_name: str, login: int | None = None, symbol: str | None = None, start_time: datetime | None = None, end_time: datetime | None = None):
+        retval = None
         if table_name == "daily":
-            # datetime -> timestamp, of metatrader format (nanoseconds since epoch)
-            start_timestamp = int(start_time.timestamp() * 1e8) if start_time else None
-            end_timestamp = int(end_time.timestamp() * 1e8) if end_time else None
-            print("start_timestamp:", start_timestamp, ", end_timestamp:", end_timestamp, " for daily table")
-            return self.fetch_table_from_daily(login, start_timestamp, end_timestamp)
+            start_timestamp = int(start_time.timestamp()) if start_time else None
+            end_timestamp = int(end_time.timestamp()) if end_time else None
+            retval = self.fetch_table_from_daily(login, start_timestamp, end_timestamp)
+        
         elif table_name == "deals":
-            # datetime -> timestamp, of metatrader format (nanoseconds since epoch)
-            start_timestamp = int(start_time.timestamp() * 1e8) if start_time else None
-            end_timestamp = int(end_time.timestamp() * 1e8) if end_time else None
-            print("start_timestamp:", start_timestamp, ", end_timestamp:", end_timestamp, " for daily table")
-            return self.fetch_table_from_deals(login, symbol, start_timestamp, end_timestamp)
+            retval = self.fetch_table_from_deals(login, symbol, start_time, end_time)
+        
         elif table_name == "eod_positions":
-            # datetime -> YYYY-MM-DD
-            start_date_str = start_time.strftime("%Y-%m-%d") if start_time else None
-            end_date_str = end_time.strftime("%Y-%m-%d") if end_time else None
-            print("start_date_str:", start_date_str, ", end_date_str:", end_date_str, " for eod_positions table")
-            return self.fetch_table_from_eod_positions(login, symbol, start_date_str, end_date_str)
+            start_time = start_time.replace(hour=0, minute=0, second=0, microsecond=0) if start_time else None
+            end_time = end_time.replace(hour=0, minute=0, second=0, microsecond=0) if end_time else None
+            retval = self.fetch_table_from_eod_positions(login, symbol, start_time, end_time)
+        
         elif table_name == "positions":
-            # datetime -> timestamp, of metatrader format (nanoseconds since epoch)
-            start_timestamp = int(start_time.timestamp() * 1e8) if start_time else None
-            end_timestamp = int(end_time.timestamp() * 1e8) if end_time else None
-            print("start_timestamp:", start_timestamp, ", end_timestamp:", end_timestamp, " for daily table")
-            return self.fetch_table_from_positions(login, symbol, start_timestamp, end_timestamp)
+            retval = self.fetch_table_from_positions(login, symbol, start_time, end_time)
+        
         elif table_name == "users":
-            # datetime -> timestamp, of metatrader format (nanoseconds since epoch)
-            start_timestamp = int(start_time.timestamp() * 1e8) if start_time else None
-            end_timestamp = int(end_time.timestamp() * 1e8) if end_time else None
-            print("start_timestamp:", start_timestamp, ", end_timestamp:", end_timestamp, " for daily table")
-            return self.fetch_table_from_users(login, start_timestamp, end_timestamp)
+            retval = self.fetch_table_from_users(login, start_time, end_time)
+        
         else:
             print(f"Unknown table name: {table_name}")
-            return None
+
+        return retval
 
 
 class Parser:
@@ -817,7 +790,7 @@ class MasterAnalyzer:
         self.calculator = Calculator()
         self.presenter = Presenter()
 
-        # pull data using collector
+        """ # pull data using collector
         # we need deals, positions, and timeframe tables (only the daily is present for now)
         print("Starting data collection from view tables...")
         login_input = input("Enter trader login to filter by (or press Enter to skip): ")
@@ -838,7 +811,8 @@ class MasterAnalyzer:
         self.presenter.place_table("raw_positions_table", self.parser.raw_data["positions_table"])
         self.presenter.place_table("raw_timeframe_daily_table", self.parser.raw_data["timeframe_tables"]["daily"])
 
-        # print available functions in parser
+ """
+        """ # print available functions in parser
         print("Available parser functions:")
         for i, func_name in enumerate(self.parser.parsing_routine_functions):
             print(f"{i} -> {func_name}")
@@ -937,7 +911,7 @@ class MasterAnalyzer:
             
             # export calculation results
             self.presenter.export_dataframe(self.calculator.result_table, filename="calculation_results.csv")
-        
+         """
         
 
     def list_available_tables(self):
@@ -999,59 +973,12 @@ class MasterAnalyzer:
             return self.parser.result_data[f"{table_type}"]
 
     def get_dfs_from_presenter(self):
+        print("tables:", self.presenter.tables)
         return self.presenter.tables
-    
-
-app = Flask(__name__)
-
-@app.route('/')
-def show_dfs():
-    
-    head = """
-        <head>
-            <title>DataFrame Viewer</title>
-            <style>
-                table { border-collapse: collapse; }
-                th, td { padding: 8px 12px; border: 1px solid #ccc; }
-                th { background-color: #f4f4f4; }
-            </style>
-        </head>
-    """
-    body = """
-        <body>
-            <h2>DataFrames</h2>
-            {% for name, table_html in tables.items() %}
-                <h3>{{ name }}</h3>
-                {{ table_html | safe }}
-            {% endfor %}
-        </body>
-    """
-    return render_template_string("""
-    <html>
-        <head>
-            <title>DataFrame Viewer</title>
-            <style>
-                table { border-collapse: collapse; }
-                th, td { padding: 8px 12px; border: 1px solid #ccc; }
-                th { background-color: #f4f4f4; }
-            </style>
-        </head>
-        <body>
-            <h2>DataFrames</h2>
-            {% for name, table_html in tables.items() %}
-                <h3>{{ name }}</h3>
-                {{ table_html | safe }}
-            {% endfor %}
-        </body>                    
-    </html>                              
-    """, tables={name: df.to_html(classes='dataframe', header=True, index=False) 
-                 for name, df in analyzer.get_dfs_from_presenter().items()})
-
-
 
 
 def main():
-    app.run(debug=True)
+    pass
     
 if __name__ == "__main__":
     main()

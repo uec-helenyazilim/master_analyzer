@@ -16,6 +16,8 @@ pymysql
 mysql-connector-python
 bs4
 
-flask
+fastapi[standard]
+uvicorn
+pydantic
 
 MetaTrader5
