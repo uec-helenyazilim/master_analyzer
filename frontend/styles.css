@@ -24,14 +24,11 @@ body {
 
 .container {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
 }
 
-/* Top-left compact form panel */
 .form-panel {
-  position: fixed;
-  top: 16px;
-  left: 16px;
   width: 340px;
   background: rgba(17, 24, 39, 0.85);
   border: 1px solid var(--border);
@@ -49,13 +46,17 @@ body {
 }
 
 .form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 
 .form-grid .full {
-  grid-column: 1 / -1;
+  width: 90%;
+}
+
+.form-grid .full input {
+  width: 100%;
 }
 
 label {
@@ -67,8 +68,8 @@ label {
 
 input[type="text"],
 input[type="number"],
-input[type="date"] {
-  width: 100%;
+input[type="datetime-local"] {
+  max-width: 100%;
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid var(--border);
@@ -100,7 +101,7 @@ button.primary {
 
 /* Tables page */
 .page-content {
-  margin: 20px 20px 20px 380px; /* leave room for fixed form */
+  margin: 20px; 
 }
 
 .table-block {

@@ -14,14 +14,6 @@ from . import parser_helpers as parser_helpers
 from . import calculator_helpers as calculator_helpers
 from . import presenter_helpers as presenter_helpers
 
-time_column_names_for_tables = {
-    "daily": "Datetime", # timestamp (1e10)
-    "deals": "Time", # YYYY-MM-DD HH:MM:SS
-    "eod_positions": "date", # YYYY-MM-DD
-    "positions": "TimeCreate", # YYYY-MM-DD HH:MM:SS
-    "users": "LastAccess" # YYYY-MM-DD HH:MM:SS
-} 
-
 columns_to_pull_from_view_tables = {
     # Columns trimmed to match Base table definitions
     'daily': [
@@ -52,6 +44,16 @@ columns_to_pull_from_view_tables = {
               'BalancePrevDay', 'BalancePrevMonth', 'EquityPrevDay', 'EquityPrevMonth', 
               'Name', 'MQID', 'LastIP', 'ApiData', 'LimitPositions', 'LimitOrders']
 }
+
+time_column_names_for_tables = {
+    "daily": "Datetime", # timestamp (1e10)
+    "deals": "Time", # YYYY-MM-DD HH:MM:SS
+    "eod_positions": "date", # YYYY-MM-DD
+    "positions": "TimeCreate", # YYYY-MM-DD HH:MM:SS
+    "users": "LastAccess" # YYYY-MM-DD HH:MM:SS
+} 
+
+
 
 local_db_columns = {
     "daily_data": ['login', 'timestamp', 'group', 'currency', 'company', 'balance', 'credit', 'interest_rate', 'commission_daily', 'commission_monthly', 'balance_prev_day', 'balance_prev_month', 'equity_prev_day', 'equity_prev_month', 'margin', 'margin_free', 'margin_level', 'margin_leverage', 'profit', 'profit_storage', 'profit_commission', 'profit_equity', 'daily_profit', 'daily_balance', 'daily_credit', 'daily_charge', 'daily_correction', 'daily_bonus', 'daily_storage', 'daily_comm_instant', 'daily_comm_fee', 'daily_comm_round'],

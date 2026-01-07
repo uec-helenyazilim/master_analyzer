@@ -7,39 +7,40 @@
     <link rel="stylesheet" href="/frontend/styles.css" />
   </head>
   <body>
-    <div class="container">
-      <section class="form-panel" role="region" aria-label="Filter form">
-        <h1>Fetch Data</h1>
-        <form id="filterForm">
-          <div class="form-grid">
-            <div class="full">
-              <label for="loginNumber">Login Number</label>
-              <input id="loginNumber" name="loginNumber" type="number" placeholder="e.g. 560012" />
-            </div>
-            <div class="full">
-              <label for="symbol">Symbol</label>
-              <input id="symbol" name="symbol" type="text" placeholder="e.g. EURUSD" />
-            </div>
-            <div>
-              <label for="startTime">Start Time</label>
-              <input id="startTime" name="startTime" type="date" />
-            </div>
-            <div>
-              <label for="endTime">End Time</label>
-              <input id="endTime" name="endTime" type="date" />
-            </div>
-            <div class="full">
-              <button class="primary" type="submit">Collect Data</button>
-            </div>
-          </div>
-        </form>
-        <div id="status" class="status" aria-live="polite"></div>
-      </section>
-
-      <main class="page-content">
-        <p>Use the form to collect data. After success, you will be redirected to the tables view.</p>
-      </main>
-    </div>
+    <main class="page-content">
+      <div class="container">
+        <section class="form-panel" role="region" aria-label="Filter form">
+          <h1>Fetch Data</h1>
+            <p>Use the form to collect data. After success, you will be redirected to the tables view.</p>
+      
+            <form id="filterForm">
+              <div class="form-grid">
+                <div class="full">
+                  <label for="loginNumber">Login Number</label>
+                  <input id="loginNumber" name="loginNumber" type="number"/>
+                </div>
+                <div class="full">
+                  <label for="symbol">Symbol</label>
+                  <input id="symbol" name="symbol" type="text" placeholder="e.g. EURUSD" />
+                </div>
+                <div class="full">
+                  <label for="startTime">Start Time</label>
+                  <input id="startTime" name="startTime" type="datetime-local" />
+                </div>
+                <div class="full">
+                  <label for="endTime">End Time</label>
+                  <input id="endTime" name="endTime" type="datetime-local" />
+                </div>
+                <div class="full">
+                  <button class="primary" type="submit">Collect Data</button>
+                </div>
+              </div>
+            </form>
+          <div id="status" class="status" aria-live="polite"></div>
+        </section>
+      </div>
+    </main>
+    
 
     <script src="/frontend/js/api.js"></script>
     <script src="/frontend/homepage/homepage.js"></script>
